@@ -360,29 +360,98 @@ namespace SDKTemplate
             /// <param name="maxReliableDepth">Furthest distance at which the sensor can provide reliable measurements.</param>
             public static unsafe void PseudoColorForDepth(int pixelWidth, byte* inputRowBytes, byte* outputRowBytes, float depthScale, float minReliableDepth, float maxReliableDepth)
             {
-                // Visualize space in front of your desktop.
-                float minInMeters = minReliableDepth * depthScale;
-                float maxInMeters = maxReliableDepth * depthScale;
-                float one_min = 1.0f / minInMeters;
-                float range = 1.0f / maxInMeters - one_min;
-
                 ushort* inputRow = (ushort*)inputRowBytes;
                 uint* outputRow = (uint*)outputRowBytes;
+
+                float minInMeters = 0.01f;
+                float maxInMeters = 4.21f;
+
                 for (int x = 0; x < pixelWidth; x++)
                 {
                     var depth = inputRow[x] * depthScale;
 
-                    if (depth == 0)
+                    float h = 300.0f/360.0f * (depth - minInMeters)/(maxInMeters - minInMeters);
+                    float s = 1.0f;
+                    float v = 1.0f;
+
+                    if(depth <= 0.1565) // Minimum depth estimation for short-throw mode is 0.156m.
                     {
-                        // Map invalid depth values to transparent pixels.
-                        // This happens when depth information cannot be calculated, e.g. when objects are too close.
-                        outputRow[x] = 0;
+                        s = 0.1f;
+                        v = 1.0f;
                     }
-                    else
+                    if(depth >= 0.945 && depth < 0.955) // Maximum depth estimation for short-throw mode is 0.95m.
                     {
-                        var alpha = (1.0f / depth - one_min) / range;
-                        outputRow[x] = PseudoColor(alpha * alpha);
+                        s = 0.1f;
+                        v = 1.0f;
                     }
+                    if(depth >= 3.515 && depth < 3.525) // Maximum depth estimation for long-throw mode is 3.52m.
+                    {
+                        s = 0.1f;
+                        v = 1.0f;
+                    }
+                    if(depth >= 4.090 && depth < 4.095) // Invalid depth value.
+                    {
+                        s = 0.1f;
+                        v = 0.3f;
+                    }
+                    if(depth >= 4.095 && depth < 4.100) // Invalid depth value.
+                    {
+                        v = 0.0f;
+                    }
+
+                    float r = 0.0f;
+                    float g = 0.0f;
+                    float b = 0.0f;
+                    if (s > 0.0f) {
+                        h *= 6.0f;
+                        int i = (int)h;
+                        float f = h - (float)i;
+                        float aa = v * (1 - s);
+                        float bb = v * (1 - s * f);
+                        float cc = v * (1 - s * (1 - f));
+                        switch (i) {
+                            default:
+                            case 0:
+                                r = v;
+                                g = cc;
+                                b = aa;
+                                break;
+                            case 1:
+                                r = bb;
+                                g = v;
+                                b = aa;
+                                break;
+                            case 2:
+                                r = aa;
+                                g = v;
+                                b = cc;
+                                break;
+                            case 3:
+                                r = aa;
+                                g = bb;
+                                b = v;
+                                break;
+                            case 4:
+                                r = cc;
+                                g = aa;
+                                b = v;
+                                break;
+                            case 5:
+                                r = v;
+                                g = aa;
+                                b = bb;
+                                break;
+                        }
+                    }
+
+                    // ピクセルデータに変換
+                    // r,g,bの値: 0.0f ～ 1.0f
+                    uint color =  (uint)(0 / 255) << 24 | // Alpha
+                                  (uint)(r * 255) << 16 | // Red
+                                  (uint)(g * 255) << 8  | // Green
+                                  (uint)(b * 255);        // Blue
+
+                    outputRow[x] = color;
                 }
             }
 
